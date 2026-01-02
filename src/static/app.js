@@ -10,8 +10,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/activities");
       const activities = await response.json();
 
-      // Clear loading message
+      // Clear loading message and reset activity select
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -24,7 +25,13 @@ document.addEventListener("DOMContentLoaded", () => {
         let participantsHtml;
         if (details.participants && details.participants.length > 0) {
           participantsHtml = `<ul class="participants-list">${details.participants
-            .map((p) => `<li>${p}</li>`)
+            .map(
+              (p) => `
+                <li>
+                  <span class="participant-email">${p}</span>
+                  <button class="delete-participant" data-activity="${name}" data-email="${p}" title="Unregister">🗑️</button>
+                </li>`
+            )
             .join("")}</ul>`;
         } else {
           participantsHtml = `<p class="no-participants">No participants yet</p>`;
@@ -76,6 +83,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh activities to show the new participant immediately
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
@@ -97,4 +106,45 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Initialize app
   fetchActivities();
+
+  // Delegate click for delete buttons
+  activitiesList.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".delete-participant");
+    if (!btn) return;
+
+    const activity = btn.dataset.activity;
+    const email = btn.dataset.email;
+
+    if (!activity || !email) return;
+
+    if (!confirm(`Unregister ${email} from ${activity}?`)) return;
+
+    try {
+      const res = await fetch(
+        `/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" }
+      );
+
+      const result = await res.json();
+
+      if (res.ok) {
+        // Refresh activities to reflect removal and updated availability
+        fetchActivities();
+
+        messageDiv.textContent = result.message || "Unregistered";
+        messageDiv.className = "success";
+        messageDiv.classList.remove("hidden");
+        setTimeout(() => messageDiv.classList.add("hidden"), 4000);
+      } else {
+        messageDiv.textContent = result.detail || "Failed to unregister";
+        messageDiv.className = "error";
+        messageDiv.classList.remove("hidden");
+      }
+    } catch (err) {
+      console.error("Error unregistering:", err);
+      messageDiv.textContent = "Failed to unregister. Try again.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+    }
+  });
 });
